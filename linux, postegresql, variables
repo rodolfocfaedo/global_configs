@@ -300,3 +300,5 @@ java -jar build/libs/*.jar
 ---
 
 ## 8. Adicionar Variáveis de Ambiente no IntellJ
+
+DB_HOST=localhost;DB_PORT=5432;DB_USER=rodolfo;DB_PASSWORD=9951;DB_NAME=
