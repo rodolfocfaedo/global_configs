@@ -1,0 +1,302 @@
+> Contexto fixo (já resolvido e fora deste guia):
+> 
+> - Windows user: **rodol**
+> - Linux (WSL) user: **rodolfo**
+> - WSL, Java e PostgreSQL **já instalados e funcionando**
+> - Variáveis globais (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`) **já configuradas**
+
+Este documento existe para **uma única função**:
+
+👉 explicar **exatamente o que muda de um projeto Spring Boot para outro**, e **só isso**.
+
+Nada aqui é setup global. Nada aqui é reinstalação. Nada aqui é gambiarra.
+
+---
+
+## REGRA DE OURO (LEIA ISSO UMA VEZ)
+
+- ❌ Você **não altera código** para trocar ambiente
+- ❌ Você **não cria projetos diferentes** para DEV / TEST / PROD
+- ❌ Você **não muda application.yml por ambiente**
+- ✅ Você roda **o mesmo projeto** mudando **apenas variáveis**
+
+Ambiente ≠ código.
+
+---
+
+## 1. ONDE TODO PROJETO DEVE MORAR (SEMPRE IGUAL)
+
+Todos os projetos Spring Boot devem ficar **dentro do WSL**, no caminho:
+
+```
+/home/rodolfo/dev/projects
+
+```
+
+Nunca rode projeto em `/mnt/c`.
+
+---
+
+## 2. DESCOMPACTAR UM PROJETO DO SPRING INITIALIZR
+
+### Passo 1 — ir para a pasta de projetos
+
+```bash
+cd /home/rodolfo/dev/projects
+
+```
+
+### Passo 2 — descompactar o ZIP vindo do Windows
+
+```bash
+unzip /mnt/c/Users/rodol/Downloads/meu-projeto.zip
+
+```
+
+### Passo 3 — entrar no projeto e ajustar permissões
+
+```bash
+cd meu-projeto
+chmod +x gradlew
+
+```
+
+Pronto. O projeto está no lugar certo.
+
+---
+
+## 3. CRIAR OS BANCOS PARA CADA AMBIENTE (UMA VEZ)
+
+Para **cada projeto**, você cria **um banco para cada ambiente**. Isso é feito **uma única vez**.
+
+### 3.1 Entrar no PostgreSQL
+
+```bash
+sudo -u postgres psql
+
+```
+
+### 3.2 Criar o banco
+
+A regra é simples:
+
+👉 **mesmo nome base**, sufixos diferentes por ambiente.
+
+```sql
+CREATE DATABASE nome_do_banco_dev; (desenvolvimento)
+CREATE DATABASE nome_do_banco_test; (testes)
+CREATE DATABASE nome_do_banco_prod; (produção)
+
+```
+
+Exemplo real:
+
+```sql
+CREATE DATABASE teste_dev;
+
+```
+
+### 3.3 Conferir
+
+```sql
+\l
+
+```
+
+### 3.4 Sair
+
+```sql
+\q
+
+```
+
+---
+
+## 4. O ÚNICO `application.yml` (COPIAR IGUAL EM TODO PROJETO)
+
+Este arquivo **não muda entre projetos** nem entre ambientes.
+
+`src/main/resources/application.yml`
+
+```yaml
+spring:
+  application:
+    name: ${APP_NAME:app}
+
+  datasource:
+    url: "jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}"
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: ${SERVER_PORT:8080}
+
+```
+
+Nunca coloque valores fixos aqui.
+
+---
+
+## 5. O QUE REALMENTE MUDA DE PROJETO PARA PROJETO
+
+Somente **nomes**.
+
+Antes de rodar o projeto:
+
+```bash
+export APP_NAME=nome-do-projeto
+export DB_NAME=nome_do_banco
+
+```
+
+Exemplo:
+
+```bash
+export APP_NAME=teste
+export DB_NAME=teste_dev
+
+```
+
+---
+
+## 6. COMO TROCAR DE AMBIENTE (SEM MEXER NO CÓDIGO)
+
+Nesta seção você **não edita arquivos**, **não renomeia projeto** e **não copia código**.
+
+Você apenas **define variáveis no terminal** e executa o projeto.
+
+> 📍 Sempre esteja dentro da pasta do projeto antes de tudo:
+> 
+> 
+> ```bash
+> cd /home/rodolfo/dev/projects/meu-projeto
+> 
+> ```
+> 
+
+---
+
+### DEV (ambiente de desenvolvimento)
+
+**Objetivo:** rodar o projeto localmente, banco de desenvolvimento, mudanças rápidas.
+
+**Passo 1 — definir o perfil ativo**
+
+```bash
+export SPRING_PROFILES_ACTIVE=dev
+
+```
+
+Isso diz ao Spring: *“estou rodando em DEV”*.
+
+**Passo 2 — apontar para o banco de DEV**
+
+```bash
+export DB_NAME=teste_dev
+
+```
+
+Aqui você escolhe **qual banco** o projeto vai usar.
+
+**Passo 3 — subir a aplicação**
+
+```bash
+./gradlew bootRun
+
+```
+
+✔ Resultado esperado:
+
+- Aplicação sobe
+- Usa banco `teste_dev`
+- Porta padrão 8080
+
+---
+
+### TEST (ambiente de testes)
+
+**Objetivo:** testar integração, dados isolados, simular cenários sem afetar DEV.
+
+**Passo 1 — trocar o perfil**
+
+```bash
+export SPRING_PROFILES_ACTIVE=test
+
+```
+
+**Passo 2 — trocar o banco**
+
+```bash
+export DB_NAME=teste_test
+
+```
+
+**Passo 3 — subir a aplicação**
+
+```bash
+./gradlew bootRun
+
+```
+
+✔ Resultado esperado:
+
+- Mesmo código
+- Mesmo projeto
+- Banco diferente (`teste_test`)
+
+---
+
+### PROD (ambiente de produção)
+
+**Objetivo:** rodar aplicação como seria em servidor real.
+
+Aqui muda **apenas a forma de subir**, não o código.
+
+**Passo 1 — definir perfil PROD**
+
+```bash
+export SPRING_PROFILES_ACTIVE=prod
+
+```
+
+**Passo 2 — apontar para banco de produção**
+
+```bash
+export DB_NAME=teste_prod
+
+```
+
+**Passo 3 — gerar o JAR**
+
+```bash
+./gradlew clean build
+
+```
+
+Isso cria o artefato final em `build/libs/`.
+
+**Passo 4 — rodar como produção**
+
+```bash
+java -jar build/libs/*.jar
+
+```
+
+✔ Resultado esperado:
+
+- Aplicação rodando via JAR
+- Banco `teste_prod`
+- Mesmo application.yml
+
+---
+
+## 8. Adicionar Variáveis de Ambiente no IntellJ
