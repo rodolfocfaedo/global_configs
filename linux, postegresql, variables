@@ -1,9 +1,11 @@
-> Contexto fixo (já resolvido e fora deste guia):
-> 
-> - Windows user: **rodol**
-> - Linux (WSL) user: **rodolfo**
-> - WSL, Java e PostgreSQL **já instalados e funcionando**
-> - Variáveis globais (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`) **já configuradas**
+# Template Didático — PostgreSQL + Spring Boot
+
+> **Contexto fixo (já resolvido e fora deste guia)**
+>
+> * Windows user: **rodol**
+> * Linux (WSL) user: **rodolfo**
+> * WSL, Java e PostgreSQL **já instalados e funcionando**
+> * Variáveis globais (`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`) **já configuradas**
 
 Este documento existe para **uma única função**:
 
@@ -13,108 +15,127 @@ Nada aqui é setup global. Nada aqui é reinstalação. Nada aqui é gambiarra.
 
 ---
 
-## REGRA DE OURO (LEIA ISSO UMA VEZ)
+## REGRA DE OURO
 
-- ❌ Você **não altera código** para trocar ambiente
-- ❌ Você **não cria projetos diferentes** para DEV / TEST / PROD
-- ❌ Você **não muda application.yml por ambiente**
-- ✅ Você roda **o mesmo projeto** mudando **apenas variáveis**
+* ❌ Você **não altera código** para trocar ambiente
+* ❌ Você **não cria projetos diferentes** para DEV / TEST / PROD
+* ❌ Você **não muda o `application.yml` por ambiente**
+* ✅ Você roda **o mesmo projeto**, mudando **apenas variáveis**
 
-Ambiente ≠ código.
+> **Ambiente ≠ código**
 
 ---
 
-## 1. ONDE TODO PROJETO DEVE MORAR (SEMPRE IGUAL)
+## 1. Onde todo projeto deve morar (sempre igual)
 
 Todos os projetos Spring Boot devem ficar **dentro do WSL**, no caminho:
 
-```
+```text
 /home/rodolfo/dev/projects
-
 ```
 
-Nunca rode projeto em `/mnt/c`.
+Nunca rode projetos em `/mnt/c`.
 
 ---
 
-## 2. DESCOMPACTAR UM PROJETO DO SPRING INITIALIZR
+## 2. Descompactar um projeto do Spring Initializr
 
-### Passo 1 — ir para a pasta de projetos
+### Passo 1 — Ir para a pasta de projetos
 
 ```bash
 cd /home/rodolfo/dev/projects
-
 ```
 
-### Passo 2 — descompactar o ZIP vindo do Windows
+### Passo 2 — Descompactar o ZIP vindo do Windows
 
 ```bash
 unzip /mnt/c/Users/rodol/Downloads/meu-projeto.zip
-
 ```
 
-### Passo 3 — entrar no projeto e ajustar permissões
+### Passo 3 — Entrar no projeto e ajustar permissões
 
 ```bash
 cd meu-projeto
 chmod +x gradlew
-
 ```
 
 Pronto. O projeto está no lugar certo.
 
 ---
 
-## 3. CRIAR OS BANCOS PARA CADA AMBIENTE (UMA VEZ)
+## 3. Modelo de banco de dados (didático e definitivo)
 
-Para **cada projeto**, você cria **um banco para cada ambiente**. Isso é feito **uma única vez**.
+### Conceito central
 
-### 3.1 Entrar no PostgreSQL
+* O **usuário e a senha permanecem sempre os mesmos**
+* Para **cada projeto**, você cria:
 
-```bash
-sudo -u postgres psql
+  * **um banco**
+  * **um schema** dentro desse banco
 
-```
-
-### 3.2 Criar o banco
-
-A regra é simples:
-
-👉 **mesmo nome base**, sufixos diferentes por ambiente.
-
-```sql
-CREATE DATABASE nome_do_banco_dev; (desenvolvimento)
-CREATE DATABASE nome_do_banco_test; (testes)
-CREATE DATABASE nome_do_banco_prod; (produção)
-
-```
-
-Exemplo real:
-
-```sql
-CREATE DATABASE teste_dev;
-
-```
-
-### 3.3 Conferir
-
-```sql
-\l
-
-```
-
-### 3.4 Sair
-
-```sql
-\q
-
-```
+> Usuário fixo → bancos diferentes → schemas diferentes
 
 ---
 
-## 4. O ÚNICO `application.yml` (COPIAR IGUAL EM TODO PROJETO)
+## 4. Criar o banco do projeto (uma única vez)
 
-Este arquivo **não muda entre projetos** nem entre ambientes.
+### 4.1 Entrar no PostgreSQL como administrador
+
+```bash
+sudo -u postgres psql
+```
+
+### 4.2 Criar o banco
+
+Regra de nome:
+
+```text
+<nome_do_projeto>_db
+```
+
+Exemplo:
+
+```sql
+CREATE DATABASE expenses_db;
+```
+
+### 4.3 Tornar o usuário dono do banco
+
+```sql
+ALTER DATABASE expenses_db OWNER TO rodolfo;
+```
+
+> **Este comando é o mais importante do processo**.
+> Ele garante que nunca haverá erro de permissão.
+
+---
+
+## 5. Criar o schema do projeto
+
+### 5.1 Entrar no banco
+
+```sql
+\c expenses_db
+```
+
+### 5.2 Criar o schema
+
+```sql
+CREATE SCHEMA expenses AUTHORIZATION rodolfo;
+```
+
+### 5.3 Definir schema padrão do usuário
+
+```sql
+ALTER ROLE rodolfo
+SET search_path TO expenses;
+```
+
+Agora, sempre que o usuário `rodolfo` conectar, ele entrará diretamente no schema correto.
+
+---
+
+## 6. O único `application.yml` (não muda nunca)
 
 `src/main/resources/application.yml`
 
@@ -124,7 +145,7 @@ spring:
     name: ${APP_NAME:app}
 
   datasource:
-    url: "jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}"
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
     username: ${DB_USER}
     password: ${DB_PASSWORD}
     driver-class-name: org.postgresql.Driver
@@ -135,170 +156,85 @@ spring:
     show-sql: true
     properties:
       hibernate:
+        default_schema: ${DB_SCHEMA}
         format_sql: true
 
 server:
   port: ${SERVER_PORT:8080}
-
 ```
 
 Nunca coloque valores fixos aqui.
 
 ---
 
-## 5. O QUE REALMENTE MUDA DE PROJETO PARA PROJETO
+## 7. O que realmente muda de projeto para projeto
 
-Somente **nomes**.
-
-Antes de rodar o projeto:
+Somente **nomes**, definidos como variáveis de ambiente:
 
 ```bash
-export APP_NAME=nome-do-projeto
-export DB_NAME=nome_do_banco
-
+export APP_NAME=expenses-api
+export DB_NAME=expenses_db
+export DB_SCHEMA=expenses
 ```
 
-Exemplo:
-
-```bash
-export APP_NAME=teste
-export DB_NAME=teste_dev
-
-```
+Nada além disso.
 
 ---
 
-## 6. COMO TROCAR DE AMBIENTE (SEM MEXER NO CÓDIGO)
+## 8. Como trocar de ambiente (sem mexer no código)
 
-Nesta seção você **não edita arquivos**, **não renomeia projeto** e **não copia código**.
+> Sempre esteja dentro da pasta do projeto:
 
-Você apenas **define variáveis no terminal** e executa o projeto.
+```bash
+cd /home/rodolfo/dev/projects/expenses-api
+```
 
-> 📍 Sempre esteja dentro da pasta do projeto antes de tudo:
-> 
-> 
-> ```bash
-> cd /home/rodolfo/dev/projects/meu-projeto
-> 
-> ```
-> 
-
----
-
-### DEV (ambiente de desenvolvimento)
-
-**Objetivo:** rodar o projeto localmente, banco de desenvolvimento, mudanças rápidas.
-
-**Passo 1 — definir o perfil ativo**
+### DEV
 
 ```bash
 export SPRING_PROFILES_ACTIVE=dev
-
-```
-
-Isso diz ao Spring: *“estou rodando em DEV”*.
-
-**Passo 2 — apontar para o banco de DEV**
-
-```bash
-export DB_NAME=teste_dev
-
-```
-
-Aqui você escolhe **qual banco** o projeto vai usar.
-
-**Passo 3 — subir a aplicação**
-
-```bash
+export DB_NAME=expenses_db
 ./gradlew bootRun
-
 ```
 
-✔ Resultado esperado:
-
-- Aplicação sobe
-- Usa banco `teste_dev`
-- Porta padrão 8080
-
----
-
-### TEST (ambiente de testes)
-
-**Objetivo:** testar integração, dados isolados, simular cenários sem afetar DEV.
-
-**Passo 1 — trocar o perfil**
+### TEST
 
 ```bash
 export SPRING_PROFILES_ACTIVE=test
-
-```
-
-**Passo 2 — trocar o banco**
-
-```bash
-export DB_NAME=teste_test
-
-```
-
-**Passo 3 — subir a aplicação**
-
-```bash
+export DB_NAME=expenses_test_db
 ./gradlew bootRun
-
 ```
 
-✔ Resultado esperado:
-
-- Mesmo código
-- Mesmo projeto
-- Banco diferente (`teste_test`)
-
----
-
-### PROD (ambiente de produção)
-
-**Objetivo:** rodar aplicação como seria em servidor real.
-
-Aqui muda **apenas a forma de subir**, não o código.
-
-**Passo 1 — definir perfil PROD**
+### PROD
 
 ```bash
 export SPRING_PROFILES_ACTIVE=prod
-
-```
-
-**Passo 2 — apontar para banco de produção**
-
-```bash
-export DB_NAME=teste_prod
-
-```
-
-**Passo 3 — gerar o JAR**
-
-```bash
+export DB_NAME=expenses_prod_db
 ./gradlew clean build
-
-```
-
-Isso cria o artefato final em `build/libs/`.
-
-**Passo 4 — rodar como produção**
-
-```bash
 java -jar build/libs/*.jar
-
 ```
-
-✔ Resultado esperado:
-
-- Aplicação rodando via JAR
-- Banco `teste_prod`
-- Mesmo application.yml
 
 ---
 
-## 8. Adicionar Variáveis de Ambiente no IntellJ
+## 9. IntelliJ — Variáveis de ambiente
 
-DB_HOST=localhost;DB_PORT=5432;DB_USER=rodolfo;DB_PASSWORD=9951;DB_NAME=
+```text
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=rodolfo
+DB_PASSWORD=*****
+DB_NAME=
+DB_SCHEMA=
+```
+
+---
+
+## CONCLUSÃO
+
+* Usuário e senha **nunca mudam**
+* Código **nunca muda**
+* `application.yml` **nunca muda**
+* Só mudam **variáveis de ambiente**
+
+Esse modelo é simples, previsível e escalável.
+Salve este arquivo e reutilize em todos os projetos.
